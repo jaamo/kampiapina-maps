@@ -1,0 +1,25 @@
+# Warm off-white land, soft sage forest, muted blue water.
+extends = "light"
+
+[map]
+land = "#f6f1e7"
+forest = "#e3e7d3"
+field = "#eeefdf"
+water = "#b7d0d9"
+
+[roads.major]
+color = "#ffffff"
+casing = "#dbd0ba"
+
+[roads.mid]
+color = "#ffffff"
+casing = "#dbd0ba"
+
+[roads.minor]
+color = "#ffffff"
+
+[roads.path]
+color = "#fbf8f1"
+
+[attribution]
+halo = "#f6f1e7"

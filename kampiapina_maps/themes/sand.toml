@@ -1,0 +1,25 @@
+# Lighter take on the brand: pale vaalea keltainen land, soft vihreä water.
+extends = "light"
+
+[map]
+land = "#f2e6c9"             # vaalea keltainen, lightened
+forest = "#e6d8b2"
+field = "#eee1c1"
+water = "#a7a381"            # vihreä blended into the land
+
+[roads.major]
+color = "#fffaf0"
+casing = "#d8c597"
+
+[roads.mid]
+color = "#fffaf0"
+casing = "#d8c597"
+
+[roads.minor]
+color = "#fbf3e0"
+
+[roads.path]
+color = "#f7eedb"
+
+[attribution]
+halo = "#f2e6c9"

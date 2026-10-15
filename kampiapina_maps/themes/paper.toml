@@ -1,0 +1,25 @@
+# Near-monochrome warm paper; the red route does all the talking.
+extends = "light"
+
+[map]
+land = "#faf7f0"
+forest = "#efebdf"
+field = "#f4f1e7"
+water = "#d8d2c3"
+
+[roads.major]
+color = "#d6ccb6"
+casing = "#d6ccb6"
+
+[roads.mid]
+color = "#ddd5c2"
+casing = "#ddd5c2"
+
+[roads.minor]
+color = "#e6dfcf"
+
+[roads.path]
+color = "#ebe5d8"
+
+[attribution]
+halo = "#faf7f0"

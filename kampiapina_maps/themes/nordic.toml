@@ -1,0 +1,25 @@
+# Cool, fresh greys and greens with lake blue.
+extends = "light"
+
+[map]
+land = "#eef0eb"
+forest = "#dbe4d3"
+field = "#e6ebe0"
+water = "#a6c3cf"
+
+[roads.major]
+color = "#ffffff"
+casing = "#cfd5ca"
+
+[roads.mid]
+color = "#ffffff"
+casing = "#cfd5ca"
+
+[roads.minor]
+color = "#ffffff"
+
+[roads.path]
+color = "#f8f9f6"
+
+[attribution]
+halo = "#eef0eb"

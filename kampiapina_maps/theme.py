@@ -20,7 +20,17 @@ def load_theme(name_or_path: str) -> dict:
         available = ", ".join(p.stem for p in THEMES_DIR.glob("*.toml"))
         raise ValueError(f"Theme not found: {name_or_path} (available: {available})")
     with open(path, "rb") as f:
-        return tomllib.load(f)
+        theme = tomllib.load(f)
+    # `extends = "light"` inherits everything not overridden.
+    base = theme.pop("extends", None)
+    return _merge(load_theme(base), theme) if base else theme
+
+
+def _merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = _merge(base[k], v) if isinstance(v, dict) and isinstance(base.get(k), dict) else v
+    return out
 
 
 def font_path(filename: str) -> Path:
