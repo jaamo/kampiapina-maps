@@ -9,7 +9,7 @@ from pathlib import Path
 from .encode import VideoWriter
 from .geocode import Geocoder
 from .gpx import load_gpx
-from .render import Renderer, Scene, check_timing
+from .render import Renderer, Scene, check_timing, render_frames
 from .theme import load_theme
 from .tiles import TileSource
 from .timeline import Timeline
@@ -77,7 +77,7 @@ def main(argv=None):
         renderer.prefetch(times)
         for t in times:
             path = out.with_name(f"{out.stem}_{t:05.2f}s.png")
-            renderer.render(t).write_to_png(str(path))
+            renderer.render(t, args.fps).write_to_png(str(path))
             print(path)
         return
 
@@ -86,8 +86,8 @@ def main(argv=None):
     writer = VideoWriter(str(out), scene.width, scene.height, args.fps)
     start = time.monotonic()
     try:
-        for i, t in enumerate(times, 1):
-            writer.write(renderer.render(t))
+        for i, frame in enumerate(render_frames(renderer, args.fps), 1):
+            writer.write(frame)
             print(f"\rframe {i}/{len(times)}", end="", file=sys.stderr)
     finally:
         writer.close()

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 @dataclass
 class Timeline:
     duration: float = 12.0          # the zoomed-in view holds from zoom_end until here
-    route_fade_in: float = 0.3      # route fades in over the overview map
     labels_start: float = 1.2       # first city starts typing
     label_stagger: float = 0.15     # delay between cities
     char_time: float = 0.03         # per letter
@@ -17,11 +16,28 @@ class Timeline:
     marker_start: float = 5.0       # marker pops in and starts moving
     marker_pop: float = 0.3
     marker_speed_kmps: float = 0.05  # how fast the marker travels along the track
+    marker_ramp: float = 1.0        # marker eases up to speed over this long
     pulse_period: float = 1.1
 
-    @property
-    def marker_travel_km(self) -> float:
-        return (self.duration - self.marker_start) * self.marker_speed_kmps
+    # Camera drift, so the map never stands still. In zoom levels per second.
+    overview_zoom_rate: float = 0.05  # slow push-in on the full route
+    follow_zoom_rate: float = 0.04    # slow push-in while following the marker
+
+    # Motion blur: a frame averages sub-frames spread over `shutter` of the frame interval
+    # (0.5 = film-style 180° shutter). More sub-frames are used the faster the camera moves.
+    # The shutter shortens when the streak would exceed max_blur_px, keeping fast zooms readable.
+    shutter: float = 0.5
+    max_blur_px: float = 48.0
+    blur_px_per_sample: float = 4.0
+
+    def marker_km_offset(self, t: float) -> float:
+        """Distance the marker has travelled at time t, easing up to speed."""
+        tau = t - self.marker_start
+        if tau <= 0:
+            return 0.0
+        r = self.marker_ramp
+        d = tau * tau / (2 * r) if tau < r else tau - r / 2
+        return d * self.marker_speed_kmps
 
     def label_start(self, i: int) -> float:
         return self.labels_start + i * self.label_stagger

@@ -15,9 +15,9 @@ class VideoWriter:
         ]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
-    def write(self, surface):
-        # cairo RGB24 is 32 bits per pixel, B G R x in memory on little-endian machines.
-        self.proc.stdin.write(bytes(surface.get_data()))
+    def write(self, frame: bytes):
+        # Raw cairo RGB24 data: 32 bits per pixel, B G R x in memory on little-endian machines.
+        self.proc.stdin.write(frame)
 
     def close(self):
         self.proc.stdin.close()

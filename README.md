@@ -2,10 +2,12 @@
 
 Animated 12-second 1920×1080 map intros from a GPX file, in Kampiapina brand colors.
 
-1. 0.0 s – full route on a stylized map (land, forest, water, roads)
+1. 0.0 s – full route on a stylized map (land, forest, water, roads), slowly pushing in
 2. 1.2 s – city names type in
 3. 3.4 s – smooth zoom to the chosen kilometer (~3 km of map across the frame)
-4. 5.0 s – pulsing marker appears at that kilometer and rides slowly along the track until the end (12 s)
+4. 5.0 s – pulsing marker appears at that kilometer and rides slowly along the track; the camera follows it, still pushing in, until the end (12 s)
+
+The camera never stops, and camera motion is motion-blurred.
 
 ## Setup
 
@@ -38,6 +40,6 @@ Tiles and geocoding results are cached in `~/.cache/kampiapina-maps`.
 ## Tweaking
 
 - Colors, line widths, label font/size: `kampiapina_maps/themes/light.toml`. Other themes start with `extends = "light"` and override only what differs.
-- Timings (typing speed, zoom start/end, marker speed): `kampiapina_maps/timeline.py`
+- Timings (typing speed, zoom start/end, marker speed), camera drift and motion blur: `kampiapina_maps/timeline.py`
 
 Map data © OpenStreetMap contributors via [OpenFreeMap](https://openfreemap.org); the credit is drawn in the corner of every frame. Font: Montserrat (OFL).

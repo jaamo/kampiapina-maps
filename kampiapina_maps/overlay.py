@@ -3,6 +3,7 @@
 import math
 
 import cairocffi as cairo
+from cairocffi import cairo as _lib, ffi as _ffi  # raw C API, for native path copy/append
 
 from .camera import Camera
 from .theme import font_path, rgb
@@ -13,26 +14,42 @@ LABEL_GAP = 20  # px between city dot and label text
 EDGE_MARGIN = 40
 
 
-def draw_route(ctx, cam: Camera, wx, wy, style: dict, alpha: float):
-    if alpha <= 0:
-        return
-    sx, sy = cam.to_screen(wx, wy)
-    ctx.push_group()
-    ctx.set_line_join(cairo.LINE_JOIN_ROUND)
-    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
-    ctx.new_path()
-    ctx.move_to(sx[0], sy[0])
-    for x, y in zip(sx[1:], sy[1:]):
-        ctx.line_to(x, y)
-    if style.get("outline_width", 0) > 0:
-        ctx.set_source_rgb(*rgb(style["outline"]))
-        ctx.set_line_width(style["width"] + 2 * style["outline_width"])
-        ctx.stroke_preserve()
-    ctx.set_source_rgb(*rgb(style["color"]))
-    ctx.set_line_width(style["width"])
-    ctx.stroke()
-    ctx.pop_group_to_source()
-    ctx.paint_with_alpha(alpha)
+class RoutePath:
+    """The track as a native cairo path, built once and replayed every frame.
+
+    Cairo stores paths in 24.8 fixed point, so points are kept relative to the track's
+    corner and scaled to span ~4M units: precise enough at any zoom, safely in range.
+    """
+
+    def __init__(self, wx, wy):
+        self.ox, self.oy = float(wx.min()), float(wy.min())
+        extent = max(float(wx.max()) - self.ox, float(wy.max()) - self.oy, 1e-12)
+        self.units = 4_000_000 / extent
+        ctx = cairo.Context(cairo.ImageSurface(cairo.FORMAT_A8, 1, 1))
+        xs = ((wx - self.ox) * self.units).tolist()
+        ys = ((wy - self.oy) * self.units).tolist()
+        ctx.move_to(xs[0], ys[0])
+        for x, y in zip(xs[1:], ys[1:]):
+            ctx.line_to(x, y)
+        self.path = _ffi.gc(_lib.cairo_copy_path(ctx._pointer), _lib.cairo_path_destroy)
+
+    def draw(self, ctx, cam: Camera, style: dict):
+        ctx.new_path()
+        ctx.save()
+        ctx.translate(*cam.to_screen(self.ox, self.oy))
+        k = cam.scale / self.units
+        ctx.scale(k, k)
+        _lib.cairo_append_path(ctx._pointer, self.path)
+        ctx.restore()  # identity again, so line widths are in screen pixels
+        ctx.set_line_join(cairo.LINE_JOIN_ROUND)
+        ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        if style.get("outline_width", 0) > 0:
+            ctx.set_source_rgb(*rgb(style["outline"]))
+            ctx.set_line_width(style["width"] + 2 * style["outline_width"])
+            ctx.stroke_preserve()
+        ctx.set_source_rgb(*rgb(style["color"]))
+        ctx.set_line_width(style["width"])
+        ctx.stroke()
 
 
 class CityLabel:

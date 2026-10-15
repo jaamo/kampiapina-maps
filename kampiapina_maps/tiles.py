@@ -3,6 +3,7 @@
 import gzip
 import json
 import math
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -24,7 +25,6 @@ class TileSource:
         self.session.headers["User-Agent"] = USER_AGENT
         self._template = None
         self.maxzoom = 14
-        self._decoded: dict[tuple[int, int, int], dict] = {}
 
     def _load_tilejson(self):
         if self._template is not None:
@@ -59,7 +59,10 @@ class TileSource:
             r.raise_for_status()
             data = r.content
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        # Write-then-rename: parallel render workers may fetch the same tile.
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_bytes(data)
+        tmp.replace(path)
         return data
 
     def prefetch(self, keys):
@@ -72,15 +75,12 @@ class TileSource:
             list(pool.map(self._fetch, missing))
 
     def get(self, z, x, y) -> dict:
-        key = (z, x, y)
-        if key not in self._decoded:
-            data = self._fetch(key)
-            if data[:2] == b"\x1f\x8b":
-                data = gzip.decompress(data)
-            self._decoded[key] = (
-                mapbox_vector_tile.decode(data, default_options={"y_coord_down": True}) if data else {}
-            )
-        return self._decoded[key]
+        """Decoded tile. Not kept in memory: decoded tiles are large, and MapRenderer
+        caches the compact drawing paths built from them instead."""
+        data = self._fetch((z, x, y))
+        if data[:2] == b"\x1f\x8b":
+            data = gzip.decompress(data)
+        return mapbox_vector_tile.decode(data, default_options={"y_coord_down": True}) if data else {}
 
     def tiles_for(self, cam: Camera, z: int) -> list[tuple[int, int, int]]:
         n = 2**z

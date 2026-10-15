@@ -3,6 +3,7 @@
 import math
 
 import cairocffi as cairo
+from cairocffi import cairo as _lib, ffi as _ffi  # raw C API, for native path copy/append
 
 from .camera import Camera
 from .theme import rgb
@@ -23,6 +24,7 @@ ROAD_GROUPS = {
 }
 ROAD_ORDER = ("path", "minor", "mid", "major")
 ROAD_GROWTH = 1.45  # road width multiplier per zoom level
+TILE_UNITS = 4096  # cached tile paths are stored in these units (cairo keeps paths in 24.8 fixed point)
 WATERWAY_WIDTH = {"river": 3.0, "canal": 2.4, "stream": 1.0, "ditch": 0.8, "drain": 0.8}
 FOREST_CLASSES = {"wood", "forest"}
 FIELD_CLASSES = {"grass", "farmland", "wetland", "park"}
@@ -37,6 +39,8 @@ class MapRenderer:
     def __init__(self, theme: dict, tiles: TileSource):
         self.theme = theme
         self.tiles = tiles
+        self._paths: dict[tuple[int, int, int], dict] = {}
+        self._scratch = cairo.Context(cairo.ImageSurface(cairo.FORMAT_A8, 1, 1))  # for building paths
 
     def levels(self, cam: Camera) -> list[tuple[int, float]]:
         """Tile zoom levels to draw for a camera, with opacity for each."""
@@ -68,81 +72,104 @@ class MapRenderer:
                 ctx.paint_with_alpha(alpha)
         return surf
 
+    def tile_paths(self, key) -> dict:
+        """Outlines of one tile, grouped by style, as native cairo paths in tile units (0..4096).
+
+        Built once per tile and replayed each frame with a single C call; issuing every
+        point from Python per frame is far too slow once the camera never stops moving.
+        """
+        if key in self._paths:
+            return self._paths[key]
+        data = self.tiles.get(*key)
+        ctx = self._scratch
+        groups = {}
+
+        def build(name, layer, add, pred=lambda p: True):
+            lyr = data.get(layer)
+            if not lyr:
+                return
+            a = TILE_UNITS / lyr.get("extent", 4096)
+            ctx.new_path()
+            hit = False
+            for f in lyr["features"]:
+                if pred(f["properties"]):
+                    hit = add(ctx, f["geometry"], a, 0.0, 0.0) or hit
+            if hit:
+                groups[name] = _ffi.gc(_lib.cairo_copy_path(ctx._pointer), _lib.cairo_path_destroy)
+
+        build("field", "landcover", _add_polygons, lambda p: p.get("class") in FIELD_CLASSES)
+        build("park", "park", _add_polygons)
+        build("forest", "landcover", _add_polygons, lambda p: p.get("class") in FOREST_CLASSES)
+        build("water", "water", _add_polygons)
+        for cls in WATERWAY_WIDTH:
+            build(f"waterway:{cls}", "waterway", _add_lines, lambda p, c=cls: p.get("class") == c)
+        for g in ROAD_ORDER:
+            build(f"road:{g}", "transportation", _add_lines, lambda p, g=g: ROAD_GROUPS.get(p.get("class")) == g)
+        ctx.new_path()
+        self._paths[key] = groups
+        return groups
+
     def _draw_level(self, ctx, cam: Camera, z: int):
         m = self.theme["map"]
-        tiles = [(k, self.tiles.get(*k)) for k in self.tiles.tiles_for(cam, z)]
         n = 2**z
         s = cam.scale
+        a = s / (n * TILE_UNITS)
+        placed = []  # (paths, offset_x, offset_y)
+        for key in self.tiles.tiles_for(cam, z):
+            _, tx, ty = key
+            placed.append((self.tile_paths(key),
+                           (tx / n - cam.cx) * s + cam.width / 2,
+                           (ty / n - cam.cy) * s + cam.height / 2))
 
-        def features(layer, pred=lambda p: True):
-            """Yields (geometry, properties, scale, offset_x, offset_y) mapping tile coords to screen."""
-            for (_, tx, ty), data in tiles:
-                lyr = data.get(layer)
-                if not lyr:
-                    continue
-                a = s / (n * lyr.get("extent", 4096))
-                bx = (tx / n - cam.cx) * s + cam.width / 2
-                by = (ty / n - cam.cy) * s + cam.height / 2
-                for f in lyr["features"]:
-                    if pred(f["properties"]):
-                        yield f["geometry"], f["properties"], a, bx, by
-
-        def fill(layer, color, pred=lambda p: True):
+        def path(name) -> bool:
+            """Set the current path to group `name` across all visible tiles, in screen space."""
             ctx.new_path()
-            for geom, _, a, bx, by in features(layer, pred):
-                _add_polygons(ctx, geom, a, bx, by)
-            ctx.set_fill_rule(cairo.FILL_RULE_WINDING)
-            ctx.set_source_rgb(*rgb(color))
-            ctx.fill()
+            hit = False
+            for groups, bx, by in placed:
+                p = groups.get(name)
+                if p is not None:
+                    ctx.save()
+                    ctx.translate(bx, by)
+                    ctx.scale(a, a)
+                    _lib.cairo_append_path(ctx._pointer, p)
+                    ctx.restore()  # back to identity, so line widths are in screen pixels
+                    hit = True
+            return hit
 
+        def fill(name, color):
+            if path(name):
+                ctx.set_source_rgb(*rgb(color))
+                ctx.fill()
+
+        def stroke(name, color, width):
+            if width >= 0.3 and path(name):
+                ctx.set_source_rgb(*rgb(color))
+                ctx.set_line_width(width)
+                ctx.stroke()
+
+        ctx.set_fill_rule(cairo.FILL_RULE_WINDING)
         ctx.set_line_join(cairo.LINE_JOIN_ROUND)
         ctx.set_line_cap(cairo.LINE_CAP_ROUND)
 
-        fill("landcover", m["field"], lambda p: p.get("class") in FIELD_CLASSES)
+        fill("field", m["field"])
         fill("park", m["field"])
-        fill("landcover", m["forest"], lambda p: p.get("class") in FOREST_CLASSES)
+        fill("forest", m["forest"])
         fill("water", m["water"])
 
-        # Rivers and streams, grouped by width.
-        by_width = {}
-        for geom, props, a, bx, by in features("waterway"):
-            w = WATERWAY_WIDTH.get(props.get("class"), 1.0) * ROAD_GROWTH ** (cam.zoom - 13)
-            if w >= 0.4:
-                by_width.setdefault(round(w, 2), []).append((geom, a, bx, by))
-        ctx.set_source_rgb(*rgb(m["water"]))
-        for w, items in by_width.items():
-            ctx.new_path()
-            for geom, a, bx, by in items:
-                _add_lines(ctx, geom, a, bx, by)
-            ctx.set_line_width(w)
-            ctx.stroke()
+        growth = ROAD_GROWTH ** (cam.zoom - 13)
+        for cls, w in WATERWAY_WIDTH.items():
+            if w * growth >= 0.4:
+                stroke(f"waterway:{cls}", m["water"], w * growth)
 
         # Roads: all casings first, then fills, from minor to major so big roads sit on top.
-        roads = {g: [] for g in ROAD_ORDER}
-        for geom, props, a, bx, by in features("transportation"):
-            group = ROAD_GROUPS.get(props.get("class"))
-            if group and geom["type"] in ("LineString", "MultiLineString"):
-                roads[group].append((geom, a, bx, by))
         styles = self.theme["roads"]
-        widths = {g: styles[g]["width"] * ROAD_GROWTH ** (cam.zoom - 13) for g in ROAD_ORDER}
         casing_px = min(max((cam.zoom - 10) * 0.6, 0.0), 1.8)
-        for pass_ in ("casing", "fill"):
-            for g in ROAD_ORDER:
-                st = styles[g]
-                if not roads[g] or widths[g] < 0.3:
-                    continue
-                if pass_ == "casing":
-                    if "casing" not in st or casing_px <= 0:
-                        continue
-                    color, w = st["casing"], widths[g] + 2 * casing_px
-                else:
-                    color, w = st["color"], widths[g]
-                ctx.new_path()
-                for geom, a, bx, by in roads[g]:
-                    _add_lines(ctx, geom, a, bx, by)
-                ctx.set_source_rgb(*rgb(color))
-                ctx.set_line_width(w)
-                ctx.stroke()
+        for g in ROAD_ORDER:
+            st = styles[g]
+            if "casing" in st and casing_px > 0:
+                stroke(f"road:{g}", st["casing"], st["width"] * growth + 2 * casing_px)
+        for g in ROAD_ORDER:
+            stroke(f"road:{g}", styles[g]["color"], styles[g]["width"] * growth)
 
 
 def _add_ring(ctx, ring, a, bx, by, close):
@@ -157,15 +184,21 @@ def _add_ring(ctx, ring, a, bx, by, close):
 def _add_polygons(ctx, geom, a, bx, by):
     t, coords = geom["type"], geom["coordinates"]
     polys = [coords] if t == "Polygon" else coords if t == "MultiPolygon" else []
+    added = False
     for poly in polys:
         for ring in poly:
             if len(ring) > 2:
                 _add_ring(ctx, ring, a, bx, by, True)
+                added = True
+    return added
 
 
 def _add_lines(ctx, geom, a, bx, by):
     t, coords = geom["type"], geom["coordinates"]
     lines = [coords] if t == "LineString" else coords if t == "MultiLineString" else []
+    added = False
     for line in lines:
         if len(line) > 1:
             _add_ring(ctx, line, a, bx, by, False)
+            added = True
+    return added
