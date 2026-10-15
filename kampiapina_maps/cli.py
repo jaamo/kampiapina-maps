@@ -27,7 +27,7 @@ def parse_args(argv=None):
     p.add_argument("--cities", nargs="*", default=[], metavar="CITY",
                    help='city names to highlight, e.g. Tampere Lempäälä "Valkeakoski@61.264,24.031"')
     p.add_argument("-o", "--output", help="output .mp4 (default: <gpx name>.mp4)")
-    p.add_argument("--theme", default="light", help="theme name or path to a .toml (default: light)")
+    p.add_argument("--theme", default="paper", help="theme name or path to a .toml (default: paper)")
     p.add_argument("--vertical", action="store_true", help="1080x1920 portrait video instead of 1920x1080")
     p.add_argument("--span", type=float, default=3.0,
                    help="km of map across the frame width when zoomed in (default: 3)")
