@@ -1,0 +1,62 @@
+# Kampiapina light theme. Brand palette:
+#   keltainen        #fbb405
+#   punanen          #911B1B
+#   vihreä           #696c46
+#   oranssi          #e2701b
+#   vaalea keltainen #e2cb93
+# Derived shades are noted next to their values.
+
+[map]
+land = "#e2cb93"             # vaalea keltainen
+forest = "#cab884"           # vaalea keltainen + 20 % vihreä
+field = "#dac591"            # vaalea keltainen + 5 % vihreä
+water = "#4a4c31"            # vihreä, darkened
+
+[roads.major]                # motorway, trunk, primary
+color = "#fff6e0"
+casing = "#c4a96d"
+width = 5.0                  # px at zoom 13; scales with zoom
+
+[roads.mid]                  # secondary, tertiary
+color = "#fff6e0"
+casing = "#c4a96d"
+width = 3.8
+
+[roads.minor]                # residential, unclassified, service
+color = "#f6e9c6"
+width = 2.2
+
+[roads.path]                 # tracks, cycleways, footways
+color = "#efdfb5"
+width = 1.2
+
+[route]
+color = "#911B1B"            # punanen
+width = 7.0
+outline_width = 0.0          # > 0 adds an outline in `outline` color
+
+[labels]
+font = "Montserrat-ExtraBold.ttf"
+size = 54
+uppercase = true
+color = "#ffffff"
+box = "#911B1B"              # punanen
+box_padding_x = 18.0
+box_padding_y = 14.0
+dot = "#911B1B"              # punanen
+dot_outline = "#ffffff"      # keeps the dot visible on top of the red route
+dot_radius = 10.0
+
+[marker]
+color = "#911B1B"            # punanen
+outline = "#ffffff"          # keeps the marker visible on top of the red route
+ring = "#911B1B"             # punanen
+radius = 12.0
+ring_radius = 64.0
+
+[attribution]
+font = "Montserrat-Bold.ttf"
+size = 18
+color = "#2a1f10"
+halo = "#e2cb93"
+alpha = 0.7

@@ -1,0 +1,26 @@
+[project]
+name = "kampiapina-maps"
+version = "0.1.0"
+description = "Animated route map intros for cycling videos"
+requires-python = ">=3.11"
+dependencies = [
+    "cairocffi",
+    "fonttools",
+    "imageio-ffmpeg",
+    "mapbox-vector-tile",
+    "numpy",
+    "requests",
+]
+
+[project.scripts]
+kampiapina-maps = "kampiapina_maps.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["kampiapina_maps"]
+
+[tool.setuptools.package-data]
+kampiapina_maps = ["themes/*.toml", "fonts/*"]
