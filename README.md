@@ -2,6 +2,8 @@
 
 Animated 12-second 1920×1080 map intros from a GPX file, in Kampiapina brand colors.
 
+For privacy the first and last 2 km of the route are cut off by default (see `--trim`), so the map never shows where a ride started or ended.
+
 1. 0.0 s – full route on a stylized map (land, forest, water, roads), slowly pushing in
 2. 1.2 s – city names type in
 3. 3.4 s – smooth zoom to the chosen kilometer (~3 km of map across the frame)
@@ -26,7 +28,8 @@ Needs the system `libcairo2` (already present on most Linux desktops). ffmpeg is
 
 | Option | |
 |---|---|
-| `--km` | kilometer to zoom into (required) |
+| `--km` | kilometer to zoom into (required), counted on the full ride as recorded |
+| `--trim` | privacy: km cut off the start and end of the route before drawing (default 2). `--trim 0` keeps everything, `--trim 3,1` trims the ends differently |
 | `--cities` | names to highlight; a wrong geocode can be fixed with `"Name@lat,lon"` |
 | `--span` | km of map across the frame when zoomed in (default 3) |
 | `--theme` | `paper` (default), `light`, `clean`, `nordic`, `sand`, or a path to a theme `.toml` |

@@ -23,7 +23,11 @@ def parse_args(argv=None):
         description="Render a 1920x1080 (or 1080x1920) map intro: full route, city names, zoom to a kilometer.",
     )
     p.add_argument("gpx", help="GPX file")
-    p.add_argument("--km", type=float, required=True, help="kilometer to zoom into, e.g. 42.5")
+    p.add_argument("--km", type=float, required=True,
+                   help="kilometer of the ride to zoom into, e.g. 42.5 (counted on the full, untrimmed ride)")
+    p.add_argument("--trim", type=parse_trim, default=(2.0, 2.0), metavar="KM[,KM]",
+                   help="privacy: km to cut off the start and end of the route; one value for both ends "
+                        "or start,end (default: 2; use 0 to keep the whole route)")
     p.add_argument("--cities", nargs="*", default=[], metavar="CITY",
                    help='city names to highlight, e.g. Tampere Lempäälä "Valkeakoski@61.264,24.031"')
     p.add_argument("-o", "--output", help="output .mp4 (default: <gpx name>.mp4)")
@@ -39,6 +43,18 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def parse_trim(text):
+    try:
+        parts = [float(x) for x in text.split(",")]
+        if len(parts) == 1:
+            parts *= 2
+        if len(parts) != 2 or min(parts) < 0:
+            raise ValueError
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected KM or START,END (non-negative), got {text!r}")
+    return parts[0], parts[1]
+
+
 def split_cities(items):
     # Accept both `--cities A B C` and `--cities "A,B,C"`; "Name@lat,lon" stays intact.
     out = []
@@ -49,9 +65,19 @@ def split_cities(items):
 
 def main(argv=None):
     args = parse_args(argv)
-    track = load_gpx(args.gpx)
-    if not 0 <= args.km <= track.length_km:
-        sys.exit(f"--km {args.km} is outside the track (0 - {track.length_km:.1f} km)")
+    full = load_gpx(args.gpx)
+    trim_start, trim_end = args.trim
+    try:
+        track = full.trim(trim_start, trim_end)
+    except ValueError as e:
+        sys.exit(f"{e} (adjust --trim)")
+    lo, hi = trim_start, full.length_km - trim_end
+    if not lo <= args.km <= hi:
+        sys.exit(f"--km {args.km:g} is outside the shown part of the track ({lo:g} - {hi:.1f} km; "
+                 f"ride is {full.length_km:.1f} km, --trim {trim_start:g},{trim_end:g})")
+    if trim_start or trim_end:
+        print(f"trimmed {trim_start:g} km from start and {trim_end:g} km from end: "
+              f"showing km {lo:g}-{hi:.1f} of {full.length_km:.1f}", file=sys.stderr)
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     geocoder = Geocoder(CACHE_DIR)
@@ -63,7 +89,7 @@ def main(argv=None):
     for c in cities:
         print(f"{c.name}: {c.lat:.5f}, {c.lon:.5f}", file=sys.stderr)
 
-    scene = Scene(track=track, km=args.km, cities=cities, theme=load_theme(args.theme),
+    scene = Scene(track=track, km=args.km - trim_start, cities=cities, theme=load_theme(args.theme),
                   timeline=Timeline(duration=args.duration), span_km=args.span,
                   width=1080 if args.vertical else 1920, height=1920 if args.vertical else 1080)
     if args.duration <= scene.timeline.zoom_end:

@@ -30,6 +30,24 @@ class Track:
         x, y = lonlat_to_world(lon, lat)
         return float(x), float(y)
 
+    def trim(self, start_km: float, end_km: float) -> "Track":
+        """Drop `start_km` from the beginning and `end_km` from the end (privacy: hide home/work).
+
+        The cut points are interpolated exactly at the requested distances and the
+        returned track's `km` restarts from 0.
+        """
+        start_km, end_km = max(start_km, 0.0), max(end_km, 0.0)
+        lo, hi = start_km, self.length_km - end_km
+        if hi - lo < 0.1:
+            raise ValueError(
+                f"track is {self.length_km:.1f} km; trimming {start_km:g} + {end_km:g} km leaves nothing")
+        inner = (self.km > lo) & (self.km < hi)
+        km = np.concatenate([[lo], self.km[inner], [hi]])
+        lat = np.interp(km, self.km, self.lat)
+        lon = np.interp(km, self.km, self.lon)
+        wx, wy = lonlat_to_world(lon, lat)
+        return Track(lat=lat, lon=lon, km=km - lo, wx=wx, wy=wy)
+
 
 def load_gpx(path: str) -> Track:
     root = ET.parse(path).getroot()
